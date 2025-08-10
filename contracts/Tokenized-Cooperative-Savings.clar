@@ -16,6 +16,7 @@
         balance: uint,
         joined-height: uint,
         total-contributed: uint,
+        reputation-score: uint,
     }
 )
 
@@ -38,6 +39,7 @@
         balance: u0,
         joined-height: u0,
         total-contributed: u0,
+        reputation-score: u0,
     }
         (map-get? members member)
     )
@@ -55,6 +57,31 @@
     (var-get member-count)
 )
 
+(define-read-only (calculate-voting-weight (member principal))
+    (let (
+            (member-data (get-member-info member))
+            (tenure-blocks (- burn-block-height (get joined-height member-data)))
+            (reputation (get reputation-score member-data))
+            (contribution-base (/ (get total-contributed member-data) u1000))
+            (contribution-factor (if (> contribution-base u50)
+                u50
+                contribution-base
+            ))
+            (tenure-base (/ tenure-blocks u1000))
+            (tenure-factor (if (> tenure-base u25)
+                u25
+                tenure-base
+            ))
+            (reputation-base (/ reputation u10))
+            (reputation-factor (if (> reputation-base u25)
+                u25
+                reputation-base
+            ))
+        )
+        (+ u1 contribution-factor tenure-factor reputation-factor)
+    )
+)
+
 (define-public (join-cooperative)
     (let ((height burn-block-height))
         (asserts! (is-none (map-get? members tx-sender)) (err u106))
@@ -62,6 +89,7 @@
             balance: u0,
             joined-height: height,
             total-contributed: u0,
+            reputation-score: u0,
         })
         (var-set member-count (+ (var-get member-count) u1))
         (ok true)
@@ -79,6 +107,7 @@
             balance: new-balance,
             joined-height: (get joined-height member-data),
             total-contributed: new-total-contributed,
+            reputation-score: (+ (get reputation-score member-data) (/ amount u100)),
         })
         (var-set total-savings (+ (var-get total-savings) amount))
         (ok true)
@@ -118,6 +147,7 @@
             (proposal (unwrap! (map-get? proposals proposal-id) err-proposal-not-found))
             (member-data (unwrap! (map-get? members tx-sender) err-not-member))
             (voters (get voters proposal))
+            (member-weight (calculate-voting-weight tx-sender))
         )
         (asserts! (< burn-block-height (get deadline proposal))
             err-proposal-expired
@@ -126,12 +156,12 @@
         (map-set proposals proposal-id
             (merge proposal {
                 yes-votes: (if vote
-                    (+ (get yes-votes proposal) u1)
+                    (+ (get yes-votes proposal) member-weight)
                     (get yes-votes proposal)
                 ),
                 no-votes: (if vote
                     (get no-votes proposal)
-                    (+ (get no-votes proposal) u1)
+                    (+ (get no-votes proposal) member-weight)
                 ),
                 voters: (unwrap! (as-max-len? (append voters tx-sender) u50)
                     err-owner-only
