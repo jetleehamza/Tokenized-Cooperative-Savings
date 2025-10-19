@@ -115,7 +115,7 @@ describe("Tokenized Cooperative Savings - Loan System Tests", () => {
         ["u1000", "u1000"],
         address1
       );
-      expect(result).toBeErr("u114"); // err-loan-already-active
+      expect(result).toBeErr(114); // err-loan-already-active
     });
   });
 
@@ -178,7 +178,7 @@ describe("Tokenized Cooperative Savings - Loan System Tests", () => {
         ["u1", "u500"],
         address2
       );
-      expect(result).toBeErr("u100"); // err-owner-only
+      expect(result).toBeErr(100); // err-owner-only
     });
 
     it("prevents payments exceeding remaining balance", () => {
@@ -188,7 +188,7 @@ describe("Tokenized Cooperative Savings - Loan System Tests", () => {
         ["u1", "u3000"],
         address1
       );
-      expect(result).toBeErr("u115"); // err-payment-amount-invalid
+      expect(result).toBeErr(115); // err-payment-amount-invalid
     });
   });
 
@@ -208,7 +208,7 @@ describe("Tokenized Cooperative Savings - Loan System Tests", () => {
         address1
       );
       
-      expect(result["credit-score"]).toBe("u115"); // 110 + (2500/500) = 115
+      expect(result.expectTuple()["credit-score"]).toBeUint(115); // 110 + (2500/500) = 115
     });
 
     it("boosts credit score when loan is fully repaid", () => {
@@ -222,8 +222,9 @@ describe("Tokenized Cooperative Savings - Loan System Tests", () => {
         address1
       );
       
-      expect(result["credit-score"]).toBe("u130"); // 110 + 20 bonus
-      expect(result["active-loan-id"]).toBe("none");
+      const memberInfo = result.expectTuple();
+      expect(memberInfo["credit-score"]).toBeUint(130); // 110 + 20 bonus
+      expect(memberInfo["active-loan-id"]).toBeNone();
     });
 
     it("tracks total loans and interest payments", () => {
@@ -237,8 +238,9 @@ describe("Tokenized Cooperative Savings - Loan System Tests", () => {
         address1
       );
       
-      expect(result["total-loans-taken"]).toBe("u1");
-      expect(result["total-interest-paid"]).toBe("u200"); // full interest paid
+      const memberInfo = result.expectTuple();
+      expect(memberInfo["total-loans-taken"]).toBeUint(1);
+      expect(memberInfo["total-interest-paid"]).toBeUint(200); // full interest paid
     });
   });
 
@@ -294,7 +296,7 @@ describe("Tokenized Cooperative Savings - Loan System Tests", () => {
         address3
       );
       
-      expect(result).toBeErr("u102"); // err-insufficient-balance
+      expect(result).toBeErr(102); // err-insufficient-balance
     });
   });
 
@@ -313,7 +315,7 @@ describe("Tokenized Cooperative Savings - Loan System Tests", () => {
         address1
       );
       
-      expect(result).toBeErr("u112"); // err-insufficient-credit-score
+      expect(result).toBeErr(112); // err-insufficient-credit-score
     });
 
     it("validates loan duration constraints", () => {
@@ -326,7 +328,7 @@ describe("Tokenized Cooperative Savings - Loan System Tests", () => {
         ["u1000", "u100"],
         address1
       );
-      expect(result1).toBeErr("u115"); // err-payment-amount-invalid
+      expect(result1).toBeErr(115); // err-payment-amount-invalid
       
       // Too long duration
       const result2 = simnet.callPublicFn(
@@ -335,7 +337,7 @@ describe("Tokenized Cooperative Savings - Loan System Tests", () => {
         ["u1000", "u5000"],
         address1
       );
-      expect(result2).toBeErr("u115"); // err-payment-amount-invalid
+      expect(result2).toBeErr(115); // err-payment-amount-invalid
     });
 
     it("prevents payments on non-existent loans", () => {
@@ -346,7 +348,7 @@ describe("Tokenized Cooperative Savings - Loan System Tests", () => {
         address1
       );
       
-      expect(result).toBeErr("u111"); // err-loan-not-found
+      expect(result).toBeErr(111); // err-loan-not-found
     });
 
     it("prevents zero-amount payments", () => {
@@ -360,7 +362,7 @@ describe("Tokenized Cooperative Savings - Loan System Tests", () => {
         address1
       );
       
-      expect(result).toBeErr("u115"); // err-payment-amount-invalid
+      expect(result).toBeErr(115); // err-payment-amount-invalid
     });
   });
 });
