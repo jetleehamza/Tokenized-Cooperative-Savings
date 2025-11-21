@@ -117,7 +117,11 @@
             (max-loan-amount (/ (* contribution u3) u4))
         )
         {
-            eligible: (and (> contribution u1000) (>= credit-score u50) (not has-active-loan)),
+            eligible: (and
+                (> contribution u1000)
+                (>= credit-score u50)
+                (not has-active-loan)
+            ),
             max-amount: max-loan-amount,
             current-score: credit-score,
         }
@@ -232,7 +236,9 @@
             err-proposal-expired
         )
         (asserts! (not (get executed proposal)) err-proposal-already-executed)
-        (asserts! (> (get yes-votes proposal) (get no-votes proposal)) err-invalid-amount)
+        (asserts! (> (get yes-votes proposal) (get no-votes proposal))
+            err-invalid-amount
+        )
         ;; For testing, skip the STX transfer
         (map-set proposals proposal-id (merge proposal { executed: true }))
         (var-set total-savings (- (var-get total-savings) (get amount proposal)))
@@ -255,7 +261,10 @@
     )
 )
 
-(define-public (request-loan (amount uint) (duration-blocks uint))
+(define-public (request-loan
+        (amount uint)
+        (duration-blocks uint)
+    )
     (let (
             (member-data (unwrap! (map-get? members tx-sender) err-not-member))
             (eligibility (calculate-loan-eligibility tx-sender))
@@ -265,11 +274,17 @@
             (available-funds (- (var-get total-savings) (var-get total-loans-outstanding)))
         )
         (asserts! (get eligible eligibility) err-insufficient-credit-score)
-        (asserts! (<= amount (get max-amount eligibility)) err-loan-limit-exceeded)
-        (asserts! (is-none (get active-loan-id member-data)) err-loan-already-active)
+        (asserts! (<= amount (get max-amount eligibility))
+            err-loan-limit-exceeded
+        )
+        (asserts! (is-none (get active-loan-id member-data))
+            err-loan-already-active
+        )
         (asserts! (<= amount available-funds) err-insufficient-balance)
-        (asserts! (and (>= duration-blocks u144) (<= duration-blocks u4320)) err-payment-amount-invalid)
-        
+        (asserts! (and (>= duration-blocks u144) (<= duration-blocks u4320))
+            err-payment-amount-invalid
+        )
+
         ;; For testing, skip the STX transfer
         (map-set loans loan-id {
             borrower: tx-sender,
@@ -283,19 +298,26 @@
             payments-made: u0,
             status: "active",
         })
-        
-        (map-set members tx-sender (merge member-data {
-            active-loan-id: (some loan-id),
-            total-loans-taken: (+ (get total-loans-taken member-data) u1),
-        }))
-        
+
+        (map-set members tx-sender
+            (merge member-data {
+                active-loan-id: (some loan-id),
+                total-loans-taken: (+ (get total-loans-taken member-data) u1),
+            })
+        )
+
         (var-set loan-count loan-id)
-        (var-set total-loans-outstanding (+ (var-get total-loans-outstanding) (+ amount total-interest)))
+        (var-set total-loans-outstanding
+            (+ (var-get total-loans-outstanding) (+ amount total-interest))
+        )
         (ok loan-id)
     )
 )
 
-(define-public (make-loan-payment (loan-id uint) (amount uint))
+(define-public (make-loan-payment
+        (loan-id uint)
+        (amount uint)
+    )
     (let (
             (loan (unwrap! (map-get? loans loan-id) err-loan-not-found))
             (member-data (unwrap! (map-get? members tx-sender) err-not-member))
@@ -305,7 +327,7 @@
         (asserts! (is-eq (get status loan) "active") err-loan-fully-paid)
         (asserts! (> amount u0) err-payment-amount-invalid)
         (asserts! (<= amount remaining) err-payment-amount-invalid)
-        
+
         ;; For testing, skip the STX transfer
         (let (
                 (new-remaining (- remaining amount))
@@ -315,29 +337,94 @@
                     amount
                 ))
             )
-            (map-set loans loan-id (merge loan {
-                remaining-balance: new-remaining,
-                payments-made: (+ (get payments-made loan) u1),
-                status: (if is-fully-paid "repaid" "active"),
-            }))
-            
-            (if is-fully-paid
-                (map-set members tx-sender (merge member-data {
-                    active-loan-id: none,
-                    credit-score: (+ (get credit-score member-data) u20),
-                    total-interest-paid: (+ (get total-interest-paid member-data) interest-portion),
-                    last-loan-payment-height: burn-block-height,
-                }))
-                (map-set members tx-sender (merge member-data {
-                    total-interest-paid: (+ (get total-interest-paid member-data) interest-portion),
-                    last-loan-payment-height: burn-block-height,
-                }))
+            (map-set loans loan-id
+                (merge loan {
+                    remaining-balance: new-remaining,
+                    payments-made: (+ (get payments-made loan) u1),
+                    status: (if is-fully-paid
+                        "repaid"
+                        "active"
+                    ),
+                })
             )
-            
-            (var-set total-loans-outstanding (- (var-get total-loans-outstanding) amount))
-            (var-set total-interest-earned (+ (var-get total-interest-earned) interest-portion))
+
+            (if is-fully-paid
+                (map-set members tx-sender
+                    (merge member-data {
+                        active-loan-id: none,
+                        credit-score: (+ (get credit-score member-data) u20),
+                        total-interest-paid: (+ (get total-interest-paid member-data) interest-portion),
+                        last-loan-payment-height: burn-block-height,
+                    })
+                )
+                (map-set members tx-sender
+                    (merge member-data {
+                        total-interest-paid: (+ (get total-interest-paid member-data) interest-portion),
+                        last-loan-payment-height: burn-block-height,
+                    })
+                )
+            )
+
+            (var-set total-loans-outstanding
+                (- (var-get total-loans-outstanding) amount)
+            )
+            (var-set total-interest-earned
+                (+ (var-get total-interest-earned) interest-portion)
+            )
             (var-set total-savings (+ (var-get total-savings) amount))
             (ok new-remaining)
         )
+    )
+)
+
+(define-read-only (get-dashboard (who principal))
+    (let (
+            (member-raw (map-get? members who))
+            (member-data (default-to {
+                balance: u0,
+                joined-height: u0,
+                total-contributed: u0,
+                active-loan-id: none,
+                credit-score: u0,
+                total-loans-taken: u0,
+                total-interest-paid: u0,
+                last-loan-payment-height: u0,
+            }
+                member-raw
+            ))
+            (is-member (is-some member-raw))
+            (active-id (get active-loan-id member-data))
+        )
+        {
+            totals: {
+                total-savings: (var-get total-savings),
+                member-count: (var-get member-count),
+                proposal-count: (var-get proposal-count),
+                loan-count: (var-get loan-count),
+                total-loans-outstanding: (var-get total-loans-outstanding),
+                total-interest-earned: (var-get total-interest-earned),
+            },
+            member: {
+                is-member: is-member,
+                balance: (get balance member-data),
+                credit-score: (get credit-score member-data),
+                total-contributed: (get total-contributed member-data),
+                active-loan-id: active-id,
+                last-loan-payment-height: (get last-loan-payment-height member-data),
+                joined-height: (get joined-height member-data),
+            },
+            loan: (match active-id
+                loan-id (match (map-get? loans loan-id)
+                    loan-data (some {
+                        id: loan-id,
+                        remaining-balance: (get remaining-balance loan-data),
+                        payment-due-height: (get payment-due-height loan-data),
+                        status: (get status loan-data),
+                    })
+                    none
+                )
+                none
+            ),
+        }
     )
 )
